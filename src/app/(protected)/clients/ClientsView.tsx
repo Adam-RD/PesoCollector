@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
-import { Client } from "@prisma/client";
-import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
 import { FiEdit2, FiPlus, FiSave, FiSearch, FiTrash2, FiX } from "react-icons/fi";
 
 type ClientsViewProps = {
@@ -20,10 +17,27 @@ type ClientForm = {
 
 const emptyForm: ClientForm = { name: "", email: "", phone: "", notes: "" };
 
-export type ClientWithStats = Client & {
+export type ClientDto = {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
+export type ClientWithStats = ClientDto & {
   pending: number;
   paid: number;
 };
+
+const inputClasses =
+  "rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400";
+const primaryButtonClasses =
+  "inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-slate-50 transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60";
+const ghostButtonClasses =
+  "inline-flex items-center gap-2 rounded-lg border border-slate-800 px-3 py-2 text-sm text-slate-200 transition hover:border-cyan-500/30 hover:bg-slate-900/60";
 
 export default function ClientsView({ initialClients }: ClientsViewProps) {
   const [clients, setClients] = useState<ClientWithStats[]>(initialClients);
@@ -83,7 +97,7 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
     }
 
     const data = await res.json();
-    const saved: Client = data.client;
+    const saved: ClientDto = data.client;
     const stats = clients.find((c) => c.id === saved.id);
     const savedWithStats: ClientWithStats = {
       ...saved,
@@ -155,7 +169,7 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
         statsMap.set(inv.clientId, current);
       });
 
-      const merged: ClientWithStats[] = (clientsJson.clients || []).map((client: Client) => {
+      const merged: ClientWithStats[] = (clientsJson.clients || []).map((client: ClientDto) => {
         const stats = statsMap.get(client.id) || { pending: 0, paid: 0 };
         return { ...client, ...stats };
       });
@@ -184,9 +198,9 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
               <h3 className="text-lg font-semibold text-slate-100">Lista y deudas</h3>
             </div>
             <div className="flex items-center gap-3">
-              <Button type="button" variant="ghost" onClick={focusForm} className="flex items-center gap-2 text-sm">
+              <button type="button" onClick={focusForm} className={`${ghostButtonClasses} flex items-center gap-2 text-sm`}>
                 <FiPlus /> Nuevo cliente
-              </Button>
+              </button>
               {syncing && <span className="text-xs text-cyan-300">Actualizando...</span>}
               <FiSearch className="text-slate-500" />
               <input
@@ -223,23 +237,26 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
                   <td className="px-4 py-3 text-slate-400">
                     <div className="font-semibold text-slate-200">{client.pending} pendientes</div>
                     <div className="text-xs text-emerald-300">{client.paid} pagadas</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="ghost" onClick={() => startEdit(client)} className="flex items-center gap-1 text-xs">
-                        <FiEdit2 /> Editar
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => deleteClient(client.id)}
-                        className="flex items-center gap-1 text-xs text-red-300 hover:text-red-200"
-                      >
-                        <FiTrash2 /> Eliminar
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(client)}
+                      className={`${ghostButtonClasses} flex items-center gap-1 text-xs`}
+                    >
+                      <FiEdit2 /> Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteClient(client.id)}
+                      className={`${ghostButtonClasses} flex items-center gap-1 text-xs text-red-300 hover:text-red-200`}
+                    >
+                      <FiTrash2 /> Eliminar
+                    </button>
+                  </div>
+                </td>
+              </tr>
               ))}
               {filteredClients.length === 0 && (
                 <tr>
@@ -259,16 +276,42 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
               <h2 className="text-lg font-semibold text-slate-100">{editingId ? "Actualiza los datos" : "Agrega un cliente"}</h2>
             </div>
             {editingId && (
-              <Button variant="ghost" onClick={resetForm} className="flex items-center gap-2 text-sm">
+              <button onClick={resetForm} className={`${ghostButtonClasses} flex items-center gap-2 text-sm`} type="button">
                 <FiX />
                 Cancelar
-              </Button>
+              </button>
             )}
           </div>
           <form className="grid gap-3 md:grid-cols-2" onSubmit={upsertClient}>
-            <Input label="Nombre" required value={form.name} onChange={handleChange("name")} placeholder="Cliente S.A." />
-            <Input label="Email" type="email" value={form.email} onChange={handleChange("email")} placeholder="correo@cliente.com" />
-            <Input label="Telefono" value={form.phone} onChange={handleChange("phone")} placeholder="+52 55 1234 5678" />
+            <label className="flex flex-col gap-2 text-sm text-slate-200">
+              <span className="text-slate-300">Nombre</span>
+              <input
+                className={inputClasses}
+                required
+                value={form.name}
+                onChange={handleChange("name")}
+                placeholder="Cliente S.A."
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm text-slate-200">
+              <span className="text-slate-300">Email</span>
+              <input
+                className={inputClasses}
+                type="email"
+                value={form.email}
+                onChange={handleChange("email")}
+                placeholder="correo@cliente.com"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm text-slate-200">
+              <span className="text-slate-300">Telefono</span>
+              <input
+                className={inputClasses}
+                value={form.phone}
+                onChange={handleChange("phone")}
+                placeholder="+52 55 1234 5678"
+              />
+            </label>
             <label className="flex flex-col gap-2 text-sm text-slate-200 md:col-span-2">
               <span className="text-slate-300">Notas</span>
               <textarea
@@ -281,14 +324,14 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
             {error && <p className="md:col-span-2 text-sm text-red-400">{error}</p>}
             {message && <p className="md:col-span-2 text-sm text-emerald-300">{message}</p>}
             <div className="md:col-span-2 flex gap-3">
-              <Button type="submit" disabled={loading} className="flex items-center gap-2">
+              <button type="submit" disabled={loading} className={`${primaryButtonClasses} flex items-center gap-2`}>
                 {editingId ? <FiSave /> : <FiPlus />}
                 {loading ? "Guardando..." : editingId ? "Actualizar" : "Crear cliente"}
-              </Button>
+              </button>
               {editingId && (
-                <Button type="button" variant="ghost" onClick={resetForm}>
+                <button type="button" onClick={resetForm} className={ghostButtonClasses}>
                   Cancelar
-                </Button>
+                </button>
               )}
             </div>
           </form>

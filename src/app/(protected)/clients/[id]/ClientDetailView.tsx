@@ -152,7 +152,7 @@ export default function ClientDetailView({ client }: ClientDetailProps) {
         <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Cliente</p>
         <h1 className="text-2xl font-semibold text-slate-100">{client.name}</h1>
         <div className="mt-2 flex flex-wrap gap-4 text-sm text-slate-400">
-          <span>Email: {client.email || "N/D"}</span>
+          <span>Direccion: {client.email || "N/D"}</span>
           <span>Telefono: {client.phone || "N/D"}</span>
           <Link
             className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-100"

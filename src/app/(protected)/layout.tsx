@@ -8,11 +8,13 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   if (!session) redirect("/login");
 
   return (
-    <div className="layout-grid">
-      <Sidebar />
-      <div className="m-4 flex flex-1 flex-col gap-4">
-        <Navbar />
-        <div className="content-card flex-1">{children}</div>
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+      <div className="layout-grid">
+        <Sidebar />
+        <div className="m-2 flex flex-1 flex-col gap-4 md:m-4">
+          <div className="content-card flex-1">{children}</div>
+        </div>
       </div>
     </div>
   );

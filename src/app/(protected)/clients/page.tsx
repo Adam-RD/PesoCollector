@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import ClientsView, { ClientWithStats } from "./ClientsView";
+import ClientsView from "./ClientsView";
+import { ClientWithStats } from "./types";
 import { Invoice } from "@prisma/client";
 
 async function getClientsWithStats(): Promise<ClientWithStats[]> {

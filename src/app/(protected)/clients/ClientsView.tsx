@@ -1,35 +1,13 @@
 'use client';
 
-import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
-import { FiEdit2, FiPlus, FiSave, FiSearch, FiTrash2, FiX } from "react-icons/fi";
+import type { ChangeEvent, FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ClientDto, ClientForm, ClientWithStats } from "./types";
+import { ClientList } from "./ClientList";
+import { ClientForm as ClientFormComponent } from "./ClientForm";
 
 type ClientsViewProps = {
   initialClients: ClientWithStats[];
-};
-
-type ClientForm = {
-  name: string;
-  email: string;
-  phone: string;
-  notes: string;
-};
-
-const emptyForm: ClientForm = { name: "", email: "", phone: "", notes: "" };
-
-export type ClientDto = {
-  id: string;
-  name: string;
-  email?: string | null;
-  phone?: string | null;
-  notes?: string | null;
-  createdAt?: string | Date;
-  updatedAt?: string | Date;
-};
-
-export type ClientWithStats = ClientDto & {
-  pending: number;
-  paid: number;
 };
 
 const inputClasses =
@@ -38,6 +16,7 @@ const primaryButtonClasses =
   "inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-slate-50 transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60";
 const ghostButtonClasses =
   "inline-flex items-center gap-2 rounded-lg border border-slate-800 px-3 py-2 text-sm text-slate-200 transition hover:border-cyan-500/30 hover:bg-slate-900/60";
+const emptyForm: ClientForm = { name: "", email: "", phone: "", notes: "" };
 
 export default function ClientsView({ initialClients }: ClientsViewProps) {
   const [clients, setClients] = useState<ClientWithStats[]>(initialClients);
@@ -49,6 +28,8 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const formRef = useRef<HTMLDivElement | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
 
   const filteredClients = useMemo(() => {
     if (!search.trim()) return clients;
@@ -58,7 +39,18 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
     });
   }, [clients, search]);
 
-  const handleChange = (key: keyof ClientForm) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedClients = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredClients.slice(start, start + pageSize);
+  }, [filteredClients, currentPage, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, clients.length]);
+
+  const handleChange = (key: keyof ClientForm) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
   };
 
@@ -67,7 +59,7 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
     setEditingId(null);
   };
 
-  const upsertClient = async (event: React.FormEvent<HTMLFormElement>) => {
+  const upsertClient = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     setMessage(null);
@@ -75,7 +67,7 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
 
     const payload = {
       name: form.name.trim(),
-      email: form.email.trim() || undefined,
+      email: form.email.trim() || undefined, // usamos email como direccion
       phone: form.phone.trim() || undefined,
       notes: form.notes.trim() || undefined,
     };
@@ -191,151 +183,36 @@ export default function ClientsView({ initialClients }: ClientsViewProps) {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="glass-panel overflow-hidden order-2 md:order-1">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Clientes</p>
-              <h3 className="text-lg font-semibold text-slate-100">Lista y deudas</h3>
-            </div>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={focusForm} className={`${ghostButtonClasses} flex items-center gap-2 text-sm`}>
-                <FiPlus /> Nuevo cliente
-              </button>
-              {syncing && <span className="text-xs text-cyan-300">Actualizando...</span>}
-              <FiSearch className="text-slate-500" />
-              <input
-                className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400"
-                placeholder="Buscar por nombre o telefono"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </div>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-slate-900/40 text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-3">Nombre</th>
-                <th className="px-4 py-3">Contacto</th>
-                <th className="px-4 py-3">Notas</th>
-                <th className="px-4 py-3">Deudas</th>
-                <th className="px-4 py-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredClients.map((client) => (
-                <tr key={client.id} className="border-t border-slate-800 text-sm text-slate-200">
-                  <td className="px-4 py-3 font-medium">
-                    <Link href={`/clients/${client.id}`} className="text-cyan-300 hover:underline">
-                      {client.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="text-slate-200">{client.email || "-"}</div>
-                    <div className="text-xs text-slate-500">{client.phone || ""}</div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-400">{client.notes || "-"}</td>
-                  <td className="px-4 py-3 text-slate-400">
-                    <div className="font-semibold text-slate-200">{client.pending} pendientes</div>
-                    <div className="text-xs text-emerald-300">{client.paid} pagadas</div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(client)}
-                      className={`${ghostButtonClasses} flex items-center gap-1 text-xs`}
-                    >
-                      <FiEdit2 /> Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteClient(client.id)}
-                      className={`${ghostButtonClasses} flex items-center gap-1 text-xs text-red-300 hover:text-red-200`}
-                    >
-                      <FiTrash2 /> Eliminar
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              ))}
-              {filteredClients.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
-                    No se encontraron clientes con ese criterio.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ClientList
+          clients={paginatedClients}
+          search={search}
+          onSearchChange={setSearch}
+          syncing={syncing}
+          focusForm={focusForm}
+          onEdit={startEdit}
+          onDelete={deleteClient}
+          page={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredClients.length}
+          onPrev={() => setPage((p) => Math.max(1, p - 1))}
+          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+          ghostButtonClasses={ghostButtonClasses}
+        />
 
-        <div ref={formRef} className="glass-panel p-4 order-1 md:order-2">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{editingId ? "Editar cliente" : "Nuevo cliente"}</p>
-              <h2 className="text-lg font-semibold text-slate-100">{editingId ? "Actualiza los datos" : "Agrega un cliente"}</h2>
-            </div>
-            {editingId && (
-              <button onClick={resetForm} className={`${ghostButtonClasses} flex items-center gap-2 text-sm`} type="button">
-                <FiX />
-                Cancelar
-              </button>
-            )}
-          </div>
-          <form className="grid gap-3 md:grid-cols-2" onSubmit={upsertClient}>
-            <label className="flex flex-col gap-2 text-sm text-slate-200">
-              <span className="text-slate-300">Nombre</span>
-              <input
-                className={inputClasses}
-                required
-                value={form.name}
-                onChange={handleChange("name")}
-                placeholder="Cliente S.A."
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-slate-200">
-              <span className="text-slate-300">Email</span>
-              <input
-                className={inputClasses}
-                type="email"
-                value={form.email}
-                onChange={handleChange("email")}
-                placeholder="correo@cliente.com"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-slate-200">
-              <span className="text-slate-300">Telefono</span>
-              <input
-                className={inputClasses}
-                value={form.phone}
-                onChange={handleChange("phone")}
-                placeholder="+52 55 1234 5678"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-slate-200 md:col-span-2">
-              <span className="text-slate-300">Notas</span>
-              <textarea
-                className="min-h-[80px] rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400"
-                value={form.notes}
-                onChange={handleChange("notes")}
-                placeholder="Contacto preferido, condiciones de pago, etc."
-              />
-            </label>
-            {error && <p className="md:col-span-2 text-sm text-red-400">{error}</p>}
-            {message && <p className="md:col-span-2 text-sm text-emerald-300">{message}</p>}
-            <div className="md:col-span-2 flex gap-3">
-              <button type="submit" disabled={loading} className={`${primaryButtonClasses} flex items-center gap-2`}>
-                {editingId ? <FiSave /> : <FiPlus />}
-                {loading ? "Guardando..." : editingId ? "Actualizar" : "Crear cliente"}
-              </button>
-              {editingId && (
-                <button type="button" onClick={resetForm} className={ghostButtonClasses}>
-                  Cancelar
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
+        <ClientFormComponent
+          formRef={formRef}
+          form={form}
+          editingId={editingId}
+          error={error}
+          message={message}
+          loading={loading}
+          onSubmit={upsertClient}
+          onReset={resetForm}
+          handleChange={handleChange}
+          ghostButtonClasses={ghostButtonClasses}
+          primaryButtonClasses={primaryButtonClasses}
+          inputClasses={inputClasses}
+        />
       </div>
     </div>
   );

@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import { FiLogOut } from "react-icons/fi";
 import { IAuthUser } from "@/features/auth/interfaces/IAuthUser";
 import { Button } from "../ui/Button";
+import { navLinks } from "./Sidebar";
 
 export function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<IAuthUser | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -34,15 +37,53 @@ export function Navbar() {
   };
 
   return (
-    <nav className="glass-panel flex items-center justify-between px-6 py-4">
-      <Link href="/dashboard" className="font-semibold text-cyan-300">
-        PesoCollector
-      </Link>
-      <div className="flex items-center gap-4 text-sm text-slate-300">
-        {user ? <span>{user.username}</span> : <span>Sesion</span>}
-        <Button variant="ghost" onClick={logout} disabled={loading}>
-          {loading ? "Saliendo..." : "Cerrar sesion"}
-        </Button>
+    <nav className="glass-panel flex items-center justify-between px-3 py-3 md:px-6 md:py-4">
+      {/* Mobile: inline nav and logout icon */}
+      <div className="flex w-full items-center justify-between gap-3 md:hidden">
+        <div className="flex flex-1 items-center gap-2 overflow-x-auto">
+          {navLinks.map(({ href, label, Icon }) => {
+            const active = pathname.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={[
+                  "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors whitespace-nowrap",
+                  active
+                    ? "bg-cyan-500/20 text-cyan-200 border border-cyan-500/30"
+                    : "text-slate-200 hover:text-cyan-200 hover:border hover:border-cyan-500/20",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <Icon className="text-cyan-300" />
+                <span>{label}</span>
+              </Link>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={logout}
+          disabled={loading}
+          className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-800 text-slate-200 transition hover:border-cyan-400 disabled:opacity-60"
+          aria-label="Cerrar sesión"
+        >
+          <FiLogOut />
+        </button>
+      </div>
+
+      {/* Desktop: brand + user info */}
+      <div className="hidden w-full items-center justify-between md:flex">
+        <Link href="/dashboard" className="font-semibold text-cyan-300">
+          PesoCollector
+        </Link>
+        <div className="flex items-center gap-4 text-sm text-slate-300">
+          {user ? <span>{user.username}</span> : <span>Sesion</span>}
+          <Button variant="ghost" onClick={logout} disabled={loading}>
+            {loading ? "Saliendo..." : "Cerrar sesion"}
+          </Button>
+        </div>
       </div>
     </nav>
   );

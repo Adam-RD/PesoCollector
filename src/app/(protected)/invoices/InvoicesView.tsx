@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Client } from "@prisma/client";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -60,6 +60,7 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
       status: deriveStatus(inv.amount, inv.paidAmount),
     }))
   );
+  const [page, setPage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -75,6 +76,25 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
       }),
     [clients, invoices]
   );
+
+  const pageSize = 10;
+  const sortedInvoices = useMemo(() => {
+    const copy = [...invoices];
+    copy.sort((a, b) => {
+      if (a.status === b.status) return 0;
+      return a.status === "PENDING" ? -1 : 1;
+    });
+    return copy;
+  }, [invoices]);
+  const totalPages = Math.max(1, Math.ceil(sortedInvoices.length / pageSize));
+  const pagedInvoices = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return sortedInvoices.slice(start, start + pageSize);
+  }, [page, sortedInvoices]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const initialClientId = clients[0]?.id || "";
   const [form, setForm] = useState<InvoiceForm>({
@@ -371,11 +391,12 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
               <th className="px-4 py-3">Monto</th>
               <th className="px-4 py-3">Estado</th>
               <th className="px-4 py-3">Vence</th>
+              <th className="px-4 py-3">Creada</th>
               <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {invoices.map((invoice) => (
+            {pagedInvoices.map((invoice) => (
               <tr key={invoice.id} className="border-t border-slate-800 text-sm text-slate-200">
                 <td className="px-4 py-3 font-medium">{invoice.client?.name || "Sin cliente"}</td>
                 <td className="px-4 py-3">
@@ -386,6 +407,7 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
                 </td>
                 <td className="px-4 py-3 font-semibold">{invoice.status}</td>
                 <td className="px-4 py-3 text-slate-400">{formatDate(invoice.dueDate)}</td>
+                <td className="px-4 py-3 text-slate-400">{formatDate(invoice.createdAt)}</td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="ghost" onClick={() => startEdit(invoice)} className="flex items-center gap-1 text-xs">
@@ -403,15 +425,34 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
                 </td>
               </tr>
             ))}
-            {invoices.length === 0 && (
+            {sortedInvoices.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
                   No hay deudas registradas todavia.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-slate-400">
+        <span>
+          Pagina {page} de {totalPages}
+        </span>
+        <div className="flex gap-2">
+          <Button type="button" variant="ghost" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+            Anterior
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+          >
+            Siguiente
+          </Button>
+        </div>
       </div>
     </div>
   );

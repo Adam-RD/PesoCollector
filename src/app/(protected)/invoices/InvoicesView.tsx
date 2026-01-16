@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { Client } from "@prisma/client";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
@@ -61,11 +63,11 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
     }))
   );
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [summaryPage, setSummaryPage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const clientSummary = useMemo(
     () =>
@@ -77,7 +79,14 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
     [clients, invoices]
   );
 
-  const pageSize = 10;
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 640px)");
+    const update = () => setPageSize(media.matches ? 5 : 10);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
   const sortedInvoices = useMemo(() => {
     const copy = [...invoices];
     copy.sort((a, b) => {
@@ -96,24 +105,44 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  const summaryPageSize = 5;
+  const summaryTotalPages = Math.max(1, Math.ceil(clientSummary.length / summaryPageSize));
+  const summaryPaged = useMemo(() => {
+    const start = (summaryPage - 1) * summaryPageSize;
+    return clientSummary.slice(start, start + summaryPageSize);
+  }, [clientSummary, summaryPage]);
+
+  useEffect(() => {
+    if (summaryPage > summaryTotalPages) setSummaryPage(summaryTotalPages);
+  }, [summaryPage, summaryTotalPages]);
+
   const initialClientId = clients[0]?.id || "";
-  const [form, setForm] = useState<InvoiceForm>({
-    clientId: initialClientId,
-    description: "",
-    amount: "",
-    paidAmount: "",
-    status: "PENDING",
-    dueDate: defaultDueDate(),
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    getValues,
+  } = useForm<InvoiceForm>({
+    defaultValues: {
+      clientId: initialClientId,
+      description: "",
+      amount: "",
+      paidAmount: "",
+      status: "PENDING",
+      dueDate: defaultDueDate(),
+    },
   });
 
-  const handleChange =
-    (key: keyof InvoiceForm) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      setForm((prev) => ({ ...prev, [key]: event.target.value }));
-    };
+  useEffect(() => {
+    if (!editingId && clients[0] && !getValues("clientId")) {
+      setValue("clientId", clients[0].id);
+    }
+  }, [clients, editingId, getValues, setValue]);
 
   const resetForm = () => {
     setEditingId(null);
-    setForm({
+    reset({
       clientId: initialClientId,
       description: "",
       amount: "",
@@ -126,7 +155,6 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
   const refreshInvoices = async () => {
     try {
       setSyncing(true);
-      setError(null);
       const res = await fetch("/api/invoices");
       if (!res.ok) throw new Error("No se pudo refrescar");
       const data = await res.json();
@@ -143,35 +171,31 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
         client: inv.client ? { id: inv.client.id, name: inv.client.name } : null,
       }));
       setInvoices(refreshed);
-      setMessage("Lista de deudas actualizada");
+      toast.info("Lista de deudas actualizada", { position: "bottom-right" });
     } catch (err) {
-      setError("No se pudo refrescar la lista de deudas");
+      toast.error("No se pudo refrescar la lista de deudas");
     } finally {
       setSyncing(false);
     }
   };
 
-  const upsertInvoice = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const upsertInvoice = async (values: InvoiceForm) => {
     setLoading(true);
-    setMessage(null);
-    setError(null);
-
-    const amountNumber = Number(form.amount);
-    const paidNumber = form.paidAmount ? Number(form.paidAmount) : undefined;
-    if (!form.clientId || Number.isNaN(amountNumber)) {
-      setError("Faltan datos obligatorios");
+    const amountNumber = Number(values.amount);
+    const paidNumber = values.paidAmount ? Number(values.paidAmount) : undefined;
+    if (!values.clientId || Number.isNaN(amountNumber)) {
+      toast.error("Faltan datos obligatorios");
       setLoading(false);
       return;
     }
 
     const payload = {
-      clientId: form.clientId,
-      description: form.description.trim() || undefined,
+      clientId: values.clientId,
+      description: values.description.trim() || undefined,
       amount: amountNumber,
       paidAmount: paidNumber,
-      status: form.status,
-      dueDate: form.dueDate,
+      status: values.status,
+      dueDate: values.dueDate,
     };
 
     const method = editingId ? "PUT" : "POST";
@@ -185,7 +209,7 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.message || "No se pudo guardar la deuda");
+      toast.error(data.message || "No se pudo guardar la deuda");
       setLoading(false);
       return;
     }
@@ -211,7 +235,11 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
       return [saved, ...prev];
     });
 
-    setMessage(editingId ? "Deuda actualizada" : "Deuda creada");
+    if (editingId) {
+      toast.warning("Deuda actualizada");
+    } else {
+      toast.success("Deuda creada");
+    }
     setLoading(false);
     resetForm();
     refreshInvoices();
@@ -219,7 +247,7 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
 
   const startEdit = (invoice: InvoiceWithClient) => {
     setEditingId(invoice.id);
-    setForm({
+    reset({
       clientId: invoice.clientId,
       description: invoice.description || "",
       amount: String(invoice.amount),
@@ -227,26 +255,21 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
       status: invoice.status,
       dueDate: new Date(invoice.dueDate).toISOString().slice(0, 10),
     });
-    setMessage(null);
-    setError(null);
   };
 
   const deleteInvoice = async (id: string) => {
     setLoading(true);
-    setMessage(null);
-    setError(null);
-
     const res = await fetch(`/api/invoices?id=${id}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.message || "No se pudo eliminar la deuda");
+      toast.error(data.message || "No se pudo eliminar la deuda");
       setLoading(false);
       return;
     }
 
     setInvoices((prev) => prev.filter((inv) => inv.id !== id));
     if (editingId === id) resetForm();
-    setMessage("Deuda eliminada");
+    toast.error("Deuda eliminada");
     setLoading(false);
     refreshInvoices();
   };
@@ -269,13 +292,12 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
           )}
         </div>
 
-        <form className="grid gap-3 md:grid-cols-2" onSubmit={upsertInvoice}>
+        <form className="grid gap-3 md:grid-cols-2" onSubmit={handleSubmit(upsertInvoice)}>
           <label className="flex flex-col gap-2 text-sm text-slate-200">
             <span className="text-slate-300">Cliente</span>
             <select
               className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400"
-              value={form.clientId}
-              onChange={handleChange("clientId")}
+              {...register("clientId")}
               required
             >
               <option value="">Selecciona un cliente</option>
@@ -293,9 +315,8 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
             min="0"
             step="0.01"
             required
-            value={form.amount}
-            onChange={handleChange("amount")}
             placeholder="5000"
+            {...register("amount")}
           />
 
           <Input
@@ -303,17 +324,15 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
             type="number"
             min="0"
             step="0.01"
-            value={form.paidAmount}
-            onChange={handleChange("paidAmount")}
             placeholder="0"
+            {...register("paidAmount")}
           />
 
           <label className="flex flex-col gap-2 text-sm text-slate-200">
             <span className="text-slate-300">Estado</span>
             <select
               className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400"
-              value={form.status}
-              onChange={handleChange("status")}
+              {...register("status")}
             >
               {statusOptions.map((status) => (
                 <option key={status} value={status}>
@@ -323,20 +342,16 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
             </select>
           </label>
 
-          <Input label="Vencimiento" type="date" required value={form.dueDate} onChange={handleChange("dueDate")} />
+          <Input label="Vencimiento" type="date" required {...register("dueDate")} />
 
           <label className="flex flex-col gap-2 text-sm text-slate-200 md:col-span-2">
             <span className="text-slate-300">Descripcion</span>
             <textarea
-              className="min-h-[80px] rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400"
-              value={form.description}
-              onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+              className="min-h-20 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400"
               placeholder="Concepto o referencia"
+              {...register("description")}
             />
           </label>
-
-          {error && <p className="md:col-span-2 text-sm text-red-400">{error}</p>}
-          {message && <p className="md:col-span-2 text-sm text-emerald-300">{message}</p>}
 
           <div className="md:col-span-2 flex gap-3">
             <Button type="submit" disabled={loading} className="flex items-center gap-2">
@@ -359,7 +374,7 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
           {syncing && <span className="ml-auto text-xs text-cyan-300">Actualizando...</span>}
         </div>
         <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-          {clientSummary.map((client) => (
+          {summaryPaged.map((client) => (
             <Link
               key={client.id}
               href={`/clients/${client.id}`}
@@ -381,17 +396,43 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
           ))}
           {clientSummary.length === 0 && <p className="text-sm text-slate-500">No hay clientes registrados.</p>}
         </div>
+        {clientSummary.length > summaryPageSize && (
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+            <span>
+              Pagina {summaryPage} de {summaryTotalPages}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setSummaryPage((p) => Math.max(1, p - 1))}
+                disabled={summaryPage === 1}
+              >
+                Anterior
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setSummaryPage((p) => Math.min(summaryTotalPages, p + 1))}
+                disabled={summaryPage === summaryTotalPages}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="glass-panel overflow-hidden">
-        <table className="w-full border-collapse">
+        <div className="overflow-x-auto">
+          <table className="min-w-[640px] w-full border-collapse sm:min-w-[860px]">
           <thead>
             <tr className="bg-slate-900/40 text-left text-xs uppercase tracking-wide text-slate-500">
               <th className="px-4 py-3">Cliente</th>
               <th className="px-4 py-3">Monto</th>
               <th className="px-4 py-3">Estado</th>
-              <th className="px-4 py-3">Vence</th>
-              <th className="px-4 py-3">Creada</th>
+              <th className="px-4 py-3 hidden sm:table-cell">Vence</th>
+              <th className="px-4 py-3 hidden sm:table-cell">Creada</th>
               <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
@@ -406,18 +447,18 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
                   )}
                 </td>
                 <td className="px-4 py-3 font-semibold">{invoice.status}</td>
-                <td className="px-4 py-3 text-slate-400">{formatDate(invoice.dueDate)}</td>
-                <td className="px-4 py-3 text-slate-400">{formatDate(invoice.createdAt)}</td>
+                <td className="px-4 py-3 text-slate-400 hidden sm:table-cell">{formatDate(invoice.dueDate)}</td>
+                <td className="px-4 py-3 text-slate-400 hidden sm:table-cell">{formatDate(invoice.createdAt)}</td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
-                    <Button type="button" variant="ghost" onClick={() => startEdit(invoice)} className="flex items-center gap-1 text-xs">
+                    <Button type="button" variant="warning" onClick={() => startEdit(invoice)} className="flex items-center gap-1 text-xs">
                       <FiEdit2 /> Editar
                     </Button>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="danger"
                       onClick={() => deleteInvoice(invoice.id)}
-                      className="flex items-center gap-1 text-xs text-red-300 hover:text-red-200"
+                      className="flex items-center gap-1 text-xs"
                     >
                       <FiTrash2 /> Eliminar
                     </Button>
@@ -433,7 +474,8 @@ export default function InvoicesView({ initialInvoices, clients }: InvoicesViewP
               </tr>
             )}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       <div className="flex items-center justify-between text-xs text-slate-400">

@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth/session";
 import { clientSchema } from "@/features/clients/validators/client.schemas";
 
 export async function GET(request: Request) {
-  const session = await getSession();
+  const session = await getSession({ clearInvalid: true });
   if (!session) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getSession();
+  const session = await getSession({ clearInvalid: true });
   if (!session) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
 
   const json = await request.json().catch(() => null);
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await getSession();
+  const session = await getSession({ clearInvalid: true });
   if (!session) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -59,7 +59,7 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const session = await getSession();
+  const session = await getSession({ clearInvalid: true });
   if (!session) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);

@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDate } from "@/lib/utils/formatDate";
 import { Button } from "@/components/ui/Button";
@@ -34,24 +36,26 @@ type ClientDetailProps = {
   client: ClientDetail;
 };
 
+type NewDebtForm = {
+  amount: string;
+  description: string;
+  dueDate: string;
+};
+
 export default function ClientDetailView({ client }: ClientDetailProps) {
   const [debts, setDebts] = useState<Debt[]>(client.invoices);
   const [paying, setPaying] = useState<Record<string, boolean>>({});
   const [payAmount, setPayAmount] = useState<Record<string, string>>({});
-  const [payError, setPayError] = useState<Record<string, string | null>>({});
   const nextMonthISO = () => {
     const now = new Date();
     now.setMonth(now.getMonth() + 1);
     return now.toISOString().slice(0, 10);
   };
 
-  const [newDebt, setNewDebt] = useState<{ amount: string; description: string; dueDate: string }>({
-    amount: "",
-    description: "",
-    dueDate: nextMonthISO(),
+  const { register, handleSubmit, reset } = useForm<NewDebtForm>({
+    defaultValues: { amount: "", description: "", dueDate: nextMonthISO() },
   });
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   const summary = useMemo(() => {
     const pending = debts.filter((d) => d.status === "PENDING");
@@ -71,10 +75,9 @@ export default function ClientDetailView({ client }: ClientDetailProps) {
     const remaining = debt.amount - (debt.paidAmount || 0);
     const amountValue = Number(payAmount[debt.id] || remaining);
     if (!amountValue || amountValue <= 0) {
-      setPayError((prev) => ({ ...prev, [debt.id]: "Ingresa un monto valido" }));
+      toast.error("Ingresa un monto valido");
       return;
     }
-    setPayError((prev) => ({ ...prev, [debt.id]: null }));
     setPaying((prev) => ({ ...prev, [debt.id]: true }));
     try {
       const res = await fetch("/api/payments", {
@@ -90,20 +93,19 @@ export default function ClientDetailView({ client }: ClientDetailProps) {
       const status = newPaid >= debt.amount ? "PAID" : "PENDING";
       setDebts((prev) => prev.map((d) => (d.id === debt.id ? { ...d, paidAmount: newPaid, status } : d)));
       setPayAmount((prev) => ({ ...prev, [debt.id]: "" }));
+      toast.success("Pago registrado");
     } catch (err: any) {
-      setPayError((prev) => ({ ...prev, [debt.id]: err.message || "Error al pagar" }));
+      toast.error(err.message || "Error al pagar");
     } finally {
       setPaying((prev) => ({ ...prev, [debt.id]: false }));
     }
   };
 
-  const handleCreateDebt = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setCreateError(null);
+  const handleCreateDebt = async (values: NewDebtForm) => {
     setCreating(true);
-    const amountNumber = Number(newDebt.amount);
+    const amountNumber = Number(values.amount);
     if (!amountNumber || amountNumber <= 0) {
-      setCreateError("Ingresa un monto valido");
+      toast.error("Ingresa un monto valido");
       setCreating(false);
       return;
     }
@@ -116,8 +118,8 @@ export default function ClientDetailView({ client }: ClientDetailProps) {
           clientId: client.id,
           amount: amountNumber,
           paidAmount: 0,
-          description: newDebt.description || undefined,
-          dueDate: newDebt.dueDate,
+          description: values.description || undefined,
+          dueDate: values.dueDate,
         }),
       });
       if (!res.ok) {
@@ -138,9 +140,10 @@ export default function ClientDetailView({ client }: ClientDetailProps) {
         description: invoice.description,
       };
       setDebts((prev) => [added, ...prev]);
-      setNewDebt({ amount: "", description: "", dueDate: nextMonthISO() });
+      reset({ amount: "", description: "", dueDate: nextMonthISO() });
+      toast.success("Deuda creada");
     } catch (err: any) {
-      setCreateError(err.message || "Error al crear deuda");
+      toast.error(err.message || "Error al crear deuda");
     } finally {
       setCreating(false);
     }
@@ -168,29 +171,25 @@ export default function ClientDetailView({ client }: ClientDetailProps) {
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Agregar deuda</p>
           <h3 className="text-lg font-semibold text-slate-100">Registra una deuda para {client.name}</h3>
         </div>
-        <form className="grid gap-3 md:grid-cols-3" onSubmit={handleCreateDebt}>
+        <form className="grid gap-3 md:grid-cols-3" onSubmit={handleSubmit(handleCreateDebt)}>
           <Input
             label="Monto"
             type="number"
             min="0"
             step="0.01"
             required
-            value={newDebt.amount}
-            onChange={(e) => setNewDebt((prev) => ({ ...prev, amount: e.target.value }))}
+            {...register("amount")}
           />
           <Input
             label="Vencimiento"
             type="date"
             required
-            value={newDebt.dueDate}
-            onChange={(e) => setNewDebt((prev) => ({ ...prev, dueDate: e.target.value }))}
+            {...register("dueDate")}
           />
           <Input
             label="Descripcion (opcional)"
-            value={newDebt.description}
-            onChange={(e) => setNewDebt((prev) => ({ ...prev, description: e.target.value }))}
+            {...register("description")}
           />
-          {createError && <p className="md:col-span-3 text-sm text-red-400">{createError}</p>}
           <div className="md:col-span-3">
             <Button type="submit" disabled={creating} className="flex items-center gap-2">
               {creating ? "Guardando..." : "Crear deuda"}
@@ -218,7 +217,8 @@ export default function ClientDetailView({ client }: ClientDetailProps) {
       </div>
 
       <div className="glass-panel overflow-hidden">
-        <table className="w-full border-collapse">
+        <div className="overflow-x-auto">
+          <table className="min-w-[820px] w-full border-collapse">
           <thead>
             <tr className="bg-slate-900/40 text-left text-xs uppercase tracking-wide text-slate-500">
               <th className="px-4 py-3">Monto</th>
@@ -272,7 +272,6 @@ export default function ClientDetailView({ client }: ClientDetailProps) {
                         >
                           {paying[invoice.id] ? "Pagando..." : "Pagar"}
                         </Button>
-                        {payError[invoice.id] && <span className="text-xs text-red-400">{payError[invoice.id]}</span>}
                       </div>
                     )}
                   </td>
@@ -287,7 +286,8 @@ export default function ClientDetailView({ client }: ClientDetailProps) {
               </tr>
             )}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
     </div>
   );

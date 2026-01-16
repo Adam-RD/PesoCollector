@@ -6,7 +6,7 @@ import { paymentSchema } from "@/features/invoices/validators/payment.schemas";
 const computeStatus = (amount: number, paidAmount: number) => (paidAmount >= amount ? "PAID" : "PENDING");
 
 export async function GET(request: Request) {
-  const session = await getSession();
+  const session = await getSession({ clearInvalid: true });
   if (!session) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getSession();
+  const session = await getSession({ clearInvalid: true });
   if (!session) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
 
   const json = await request.json().catch(() => null);
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const session = await getSession();
+  const session = await getSession({ clearInvalid: true });
   if (!session) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);

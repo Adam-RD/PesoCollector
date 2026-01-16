@@ -8,19 +8,28 @@ export async function createSession(userId: string, username: string) {
   return token;
 }
 
-export async function getSession() {
+type GetSessionOptions = {
+  clearInvalid?: boolean;
+};
+
+export async function getSession(options: GetSessionOptions = {}) {
+  const { clearInvalid = false } = options;
   const token = await getAuthCookie();
   if (!token) return null;
 
   const payload = await verifyAuthToken(token);
   if (!payload) {
-    await clearAuthCookie();
+    if (clearInvalid) {
+      await clearAuthCookie();
+    }
     return null;
   }
 
   const user = await prisma.user.findUnique({ where: { id: payload.userId } });
   if (!user) {
-    await clearAuthCookie();
+    if (clearInvalid) {
+      await clearAuthCookie();
+    }
     return null;
   }
 

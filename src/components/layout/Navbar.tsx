@@ -66,8 +66,8 @@ export function Navbar() {
           type="button"
           onClick={logout}
           disabled={loading}
-          className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-800 text-slate-200 transition hover:border-cyan-400 disabled:opacity-60"
-          aria-label="Cerrar sesión"
+          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-500/20 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+          aria-label="Cerrar sesion"
         >
           <FiLogOut />
         </button>
@@ -79,8 +79,8 @@ export function Navbar() {
           PesoCollector
         </Link>
         <div className="flex items-center gap-4 text-sm text-slate-300">
-          {user ? <span>{user.username}</span> : <span>Sesion</span>}
-          <Button variant="ghost" onClick={logout} disabled={loading}>
+          {user ? <span className="uppercase">{user.username}</span> : <span>Sesion</span>}
+          <Button variant="danger" onClick={logout} disabled={loading}>
             {loading ? "Saliendo..." : "Cerrar sesion"}
           </Button>
         </div>
